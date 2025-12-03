@@ -18,8 +18,15 @@ body {
 }
 
 /* ========================
-   HEADER WITH STATUS PANEL
-   ======================== */
+    HEADER WITH STATUS PANEL
+    ------------------------
+    Chú thích (TIẾNG VIỆT):
+    - `.header`: Khung header trên cùng chứa tiêu đề ứng dụng.
+    - `.header-content`: Hộp chứa nội dung header, căn giữa, chứa `title` và `status-panel`.
+    - `.title`: Kiểu chữ lớn, gradient màu để làm nổi bật tên app.
+    - `.status-panel`: Khung nhỏ ở header để hiển thị trạng thái ngắn (ví dụ: YOLOv8 Demo).
+    Mục tiêu: rõ ràng, đậm và giữ hành vi responsive khi thu nhỏ màn hình.
+    ======================== */
 .header {
     background: linear-gradient(90deg, #16213e 0%, #0f3460 100%);
     padding: 25px 20px;
@@ -65,35 +72,57 @@ body {
     align-items: flex-start;
 }
 
-/* Traffic light panel - đèn giao thông hiển thị ngang với thời gian bên cạnh */
+/* Traffic light panel - đèn giao thông hiển thị ngang với thời gian bên cạnh
+    Chú thích (TIẾNG VIỆT):
+    - `.traffic-light-panel`: Khung tổng của các mục đèn giao thông.
+    - `.traffic-light-container`: chứa 3 mục đèn (Xanh/Vàng/Đỏ) theo hàng dọc.
+    - `.traffic-light-item`: mỗi hàng đèn, gồm quả đèn (`.light`) và thông tin thời gian (`.light-info`).
+    - `.light`: vòng tròn màu (kích thước cố định 48px) — opacity thấp khi tắt, full khi active.
+    - `.light-info` / `.light-time`: hiển thị nhãn và thời gian tương ứng (vd. 20s).
+    Lưu ý: `.traffic-light-item.active` dùng để nhấn mạnh trạng thái (bóng, viền sáng).
+*/
 .traffic-light-panel {
     display: flex;
     flex-direction: column;
-    gap: 18px;
-    margin-bottom: 0;
-    background: linear-gradient(135deg, rgba(20,60,100,0.5), rgba(15,50,90,0.5));
-    padding: 20px;
-    border-radius: 14px;
-    border: 2px solid rgba(0,212,255,0.3);
-    box-shadow: 0 0 40px rgba(0,212,255,0.15);
+    gap: 16px;
+    margin-bottom: 18px;
+    background: linear-gradient(135deg, rgba(0,80,120,0.6), rgba(0,40,80,0.6));
+    padding: 22px;
+    border-radius: 16px;
+    border: 2px solid rgba(0,212,255,0.35);
+    box-shadow: 0 0 50px rgba(0,212,255,0.2), inset 0 1px 0 rgba(255,255,255,0.05);
+}
+
+.section-title-traffic {
+    font-size: 1.1em;
+    font-weight: 700;
+    color: #00d4ff;
+    margin-bottom: 4px;
+    letter-spacing: 0.5px;
+}
+
+.traffic-light-container {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
 }
 
 .traffic-light-item {
     display: flex;
     align-items: center;
-    gap: 18px;
-    padding: 16px 18px;
-    background: rgba(255,255,255,0.04);
+    gap: 16px;
+    padding: 14px 16px;
+    background: rgba(255,255,255,0.05);
     border-radius: 12px;
-    border: 2px solid rgba(0,0,0,0.15);
+    border: 2px solid rgba(0,0,0,0.2);
     transition: all 0.3s ease;
 }
 
 .traffic-light-item.active {
     background: rgba(255,255,255,0.08);
-    border-color: rgba(0,212,255,0.5);
-    transform: scale(1.05);
-    box-shadow: 0 0 30px rgba(0,212,255,0.2);
+    border-color: rgba(0,212,255,0.4);
+    transform: scale(1.02);
+    box-shadow: 0 0 25px rgba(0,212,255,0.15);
 }
 
 .traffic-light-item .light {
@@ -163,7 +192,13 @@ body {
     color: #00d4ff;
 }
 
-/* Time Display */
+/* Time Display
+    Chú thích (TIẾNG VIỆT):
+    - `.time-display`: Khung hiển thị thời gian chờ/đếm (client-side timer).
+    - `.time-label`: nhãn nhỏ (ví dụ: 'Elapsed').
+    - `.time-value`: giá trị thời gian dạng monospace.
+    Sử dụng để cung cấp feedback thời gian cho người dùng trong UI.
+*/
 .time-display {
     display: flex;
     flex-direction: column;
@@ -213,11 +248,105 @@ body {
     font-weight: 700;
     margin-bottom: 8px;
 }
+
+/* Density Panel - Mật độ giao thông (HIỂN THỊ)
+    Chú thích (TIẾNG VIỆT):
+    - `.density-panel`: khung chứa phần hiển thị mật độ giao thông.
+    - `.density-display`: lưới hai ô (tổng số xe + mức độ) để hiển thị nhanh.
+    - `.density-box`: ô chỉ số lớn, dùng gradient để nổi bật số liệu.
+    - `.density-level`: hiển thị mức (Ít / Trung bình / Khá / Đông) kèm biểu tượng màu.
+    - `.density-rule`: ghi chú các ngưỡng phân loại.
+*/
+.density-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.density-panel .section-title {
+    color: #00d4ff;
+    font-weight: 700;
+    font-size: 1.1em;
+    letter-spacing: 0.5px;
+}
+
+/* Density Display - Mật độ giao thông */
+.density-display {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 0;
+}
+
+.density-box {
+    background: linear-gradient(135deg, rgba(0,60,100,0.4), rgba(0,30,60,0.4));
+    border: 1.5px solid rgba(0,212,255,0.3);
+    border-radius: 14px;
+    padding: 20px 16px;
+    text-align: center;
+    transition: all 0.3s ease;
+}
+
+.density-box:hover {
+    background: linear-gradient(135deg, rgba(0,80,130,0.5), rgba(0,50,90,0.5));
+    border-color: rgba(0,212,255,0.6);
+    box-shadow: 0 0 25px rgba(0,212,255,0.15);
+    transform: translateY(-2px);
+}
+
+.density-label {
+    font-size: 0.95em;
+    color: #99aabb;
+    font-weight: 700;
+    margin-bottom: 10px;
+    letter-spacing: 0.3px;
+}
+
+.density-value {
+    font-size: 3em;
+    font-weight: 700;
+    color: #00d4ff;
+    background: linear-gradient(135deg, #00d4ff, #0099ff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    line-height: 1;
+}
+
+.density-level {
+    font-size: 1.4em;
+    font-weight: 700;
+    color: #e0e0e0;
+    min-height: 1.9em;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+}
+.density-rule {
+    font-size: 0.9em;
+    color: #99aabb;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.density-rule:last-child {
+    margin-bottom: 0;
+}
+
+.density-rule strong {
+    color: #00d4ff;
+    font-weight: 700;
+}
+
 .persec-grid {
     display: grid;
     grid-template-columns: repeat(1, 1fr);
     gap: 10px;
 }
+
 .persec-item, .persec-item.wide-item {
     display: flex;
     justify-content: space-between;
@@ -227,11 +356,13 @@ body {
     background: rgba(0,0,0,0.02);
     border-radius: 8px;
 }
+
 .persec-label {
     color: #99aabb;
     font-size: 1em;
     font-weight: 700;
 }
+
 .persec-input, .persec-input.wide-input {
     width: 120px;
     padding: 8px 10px;
@@ -240,6 +371,7 @@ body {
     background: rgba(255,255,255,0.02);
     color: #e0e0e0;
 }
+
 .persec-note {
     margin-top: 8px;
     font-size: 0.85em;
@@ -267,11 +399,17 @@ body {
     gap: 16px;
 }
 
-/* Row 1: Top (input left + lights right) */
+/* Row 1: Top (chứa phần chọn ảnh và khung camera)
+     Chú thích (TIẾNG VIỆT):
+     - `.top-row`: bố cục lưới cho phần trên cùng, trái là `input-section` (chọn ảnh, các nút)
+         và phải là `camera-section` (hiển thị stream MJPEG từ server).
+     - `.input-section`: khu vực chứa `control-panel` với form upload và các nút chức năng.
+     - `.camera-section`: khu vực chỉ hiển thị live stream (không chứa khung kết quả nữa).
+*/
 .top-row {
     display: grid;
-    grid-template-columns: 1fr 0.6fr;
-    gap: 12px; /* closer together */
+    grid-template-columns: 0.7fr 1fr; /* thu nhỏ khung chọn ảnh (trái) - khung phải hiển thị live */
+    gap: 18px;
 }
 
 .input-section {
@@ -279,10 +417,58 @@ body {
 }
 
 .lights-section {
-    flex: 1;
+    display: none;
+}
+
+/* Camera section styles - khung camera realtime (server-side)
+    Chú thích (TIẾNG VIỆT):
+    - `.camera-section`: hộp chứa camera live stream (dùng `<img src="/camera_stream">`).
+    - `.camera-wrapper`: chứa các `camera-box` theo hàng ngang.
+    - `.camera-box`: khung con cho video/ảnh, dùng để tạo border, padding và background.
+    - `.camera-video`: dành cho `<video>` hoặc `<img>` stream; tại đây ta dùng `<img>` cho MJPEG.
+    Lưu ý: camera stream được cung cấp bởi endpoint `/camera_stream` trên server (Pi).
+*/
+.camera-section {
+    display: block;
+}
+
+.camera-wrapper {
     display: flex;
-    justify-content: center;
-    align-items: flex-start;
+    gap: 12px;
+    align-items: stretch;
+}
+
+.camera-box {
+    flex: 1;
+    background: linear-gradient(135deg, rgba(16,52,96,0.45), rgba(12,36,70,0.45));
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid rgba(0,212,255,0.12);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.camera-label {
+    font-size: 0.9em;
+    color: #99aabb;
+    font-weight: 700;
+}
+
+.camera-video {
+    width: 100%;
+    height: 430px;
+    object-fit: cover;
+    border-radius: 8px;
+    background: #000;
+}
+
+.camera-processed {
+    width: 100%;
+    height: 220px;
+    object-fit: contain;
+    border-radius: 8px;
+    background: rgba(0,0,0,0.2);
 }
 
 /* Row 2: Middle (images full width, side-by-side) */
@@ -321,8 +507,15 @@ body {
 }
 
 /* ========================
-   CONTROL PANEL
-   ======================== */
+    CONTROL PANEL (FORM, INPUTS)
+    -----------------------------
+    Chú thích (TIẾNG VIỆT):
+    - `.control-panel`: khung chứa form upload/chọn ảnh và các control (CONF, IOU, nút Detect).
+    - `.form-group`, `.form-section`: tổ chức các trường form theo lưới/khối.
+    - `.file-input`: style cho input file, có vùng kéo thả giả trên desktop.
+    - `.file-name`: hiển thị tên file đã chọn và trạng thái.
+    Mục tiêu: tạo trải nghiệm upload trực quan và rõ ràng cho người dùng.
+    ======================== */
 .control-panel {
     background: linear-gradient(135deg, rgba(16, 52, 96, 0.8), rgba(15, 52, 96, 0.8));
     padding: 30px;
@@ -357,7 +550,12 @@ body {
     font-weight: 700;
 }
 
-/* File Input */
+/* File Input
+    Chú thích (TIẾNG VIỆT):
+    - `.file-input`: style cho input type=file, nút chọn file bên trong.
+    - `.file-input::file-selector-button`: nút bên trong input để chọn file, có style rõ ràng.
+    - `.file-name`: hiển thị tên file, kích thước và tên file đầu ra dự kiến.
+*/
 .file-input {
     padding: 12px;
     background: rgba(255, 255, 255, 0.05);
@@ -441,7 +639,12 @@ body {
     box-shadow: 0 0 25px rgba(0, 212, 255, 0.8);
 }
 
-/* Buttons */
+/* Buttons
+    Chú thích (TIẾNG VIỆT):
+    - `.btn-primary`: nút hành động chính (Detect, Bật Camera khi dùng client-side).
+    - `.btn-secondary`: nút phụ (Download, Chụp ảnh, v.v.).
+    Các nút có hiệu ứng hover/active để người dùng biết trạng thái tương tác.
+*/
 .btn-primary {
     background: linear-gradient(135deg, #00d4ff, #0099ff);
     color: #0f0f1e;
@@ -530,8 +733,15 @@ body {
 }
 
 /* ========================
-   RESULTS SECTION
-   ======================== */
+    RESULTS SECTION (ẢNH GỐC & ẢNH SAU XỬ LÝ)
+    -----------------------------------------
+    Chú thích (TIẾNG VIỆT):
+    - `.results-section`: vùng chứa kết quả sau khi detect.
+    - `.image-box`: khung cho mỗi ảnh (gốc / sau xử lý).
+    - `.image-wrapper`: container giữ ảnh, dùng `min-height: 55vh` để auto scale theo viewport.
+    - `.result-image`: ảnh thực tế (ẩn trước khi load xong, dùng class `.active` để hiển thị).
+    - `#downloadBtn`: link để tải về ảnh đã xử lý.
+*/
 .results-section {
     margin-top: 40px;
     margin-bottom: 40px;
@@ -621,7 +831,12 @@ body {
     min-height: 300px;
 }
 
-/* Counts grid */
+/* Counts grid (Đếm xe theo lớp)
+    Chú thích (TIẾNG VIỆT):
+    - `.counts-panel`: khung chứa các ô đếm.
+    - `.counts-grid`: lưới các `.count-box` hiển thị số lượng cho từng lớp.
+    - `.count-box`: ô đơn cho mỗi lớp, chứa `.count-value` (số lớn) và `.count-label` (tên lớp).
+*/
 .counts-panel {
     margin-top: 8px;
     background: linear-gradient(135deg, rgba(10,20,40,0.6), rgba(8,18,36,0.6));
@@ -717,8 +932,15 @@ body {
 }
 
 /* ========================
-   RESPONSIVE DESIGN
-   ======================== */
+    RESPONSIVE DESIGN (THU GỌN MÀN HÌNH)
+    -------------------------------------
+    Chú thích (TIẾNG VIỆT):
+    - Các media queries tại đây giúp bố cục chuyển về một cột, ẩn divider,
+      và điều chỉnh padding/ kích thước cho thiết bị nhỏ (tablet/phone).
+*/
+/* ========================
+    RESPONSIVE DESIGN
+    ======================== */
 @media (max-width: 1024px) {
     .image-container {
         grid-template-columns: 1fr;

@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request, url_for
+from flask import Flask, render_template, jsonify, request, url_for, Response
 from ultralytics import YOLO
 import cv2
 import os
@@ -158,47 +158,24 @@ def upload():
     except Exception:
         counts = [0] * num_classes
 
-    # Try to read per-class seconds sent from client (JSON array in form field 'persec')
-    # If not provided, fall back to default mapping below.
-    per_sec_client = None
-    try:
-        per_sec_raw = request.form.get('persec')
-        if per_sec_raw:
-            parsed = json.loads(per_sec_raw)
-            if isinstance(parsed, (list, tuple)):
-                per_sec_client = [int(x) if x is not None else 0 for x in parsed]
-    except Exception:
-        per_sec_client = None
-
-    # Default mapping seconds per vehicle by class name
-    default_per_sec = {
-        'car': 5,
-        'motorbike': 5,
-        'van': 3,
-        'truck': 8,
-        'threewheel': 4,
-        'bus': 10
-    }
-
-    # Compute total red seconds = sum(per_sec[class] * count[class])
-    total_seconds = 0
-    if per_sec_client and len(per_sec_client) >= num_classes:
-        # Use client-provided per-class seconds (array aligned by index)
-        for idx in range(num_classes):
-            sec = int(per_sec_client[idx]) if per_sec_client[idx] is not None else 0
-            total_seconds += counts[idx] * sec
+    # ====================================
+    # TÍNH MẬT ĐỘ GIAO THÔNG
+    # Tổng số xe -> áp dụng 4 mức độ:
+    # < 5 xe: Ít (20s đỏ)
+    # 5-10 xe: Trung bình (45s đỏ)
+    # 10-15 xe: Khá (60s đỏ)
+    # > 15 xe: Đông (90s đỏ)
+    # ====================================
+    total_vehicles = sum(counts)
+    
+    if total_vehicles < 5:
+        total_seconds = 20  # Ít
+    elif total_vehicles <= 10:
+        total_seconds = 45  # Trung bình
+    elif total_vehicles <= 15:
+        total_seconds = 60  # Khá
     else:
-        # Use class name mapping (or fallback order)
-        if CLASS_NAMES:
-            for idx, name in enumerate(CLASS_NAMES[:num_classes]):
-                sec = default_per_sec.get(name, 5)
-                total_seconds += counts[idx] * sec
-        else:
-            fallback_names = ['car', 'threewheel', 'bus', 'truck', 'motorbike', 'van']
-            for idx in range(num_classes):
-                name = fallback_names[idx] if idx < len(fallback_names) else ''
-                sec = default_per_sec.get(name, 5)
-                total_seconds += counts[idx] * sec
+        total_seconds = 90  # Đông
 
     # Compute traffic light durations
     yellow_seconds = 3
@@ -235,3 +212,80 @@ def upload():
 # ===============================
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=True)
+
+
+# ===============================
+# Camera stream and single-capture endpoints (for Raspberry Pi USB camera)
+# - /camera_stream returns an MJPEG stream read from /dev/video0 (cv2.VideoCapture(0))
+# - /camera_capture captures one frame, saves to uploads folder and returns its public URL
+# Note: these endpoints access the local camera device on the server (suitable for Raspberry Pi)
+# ===============================
+
+
+@app.route('/camera_status')
+def camera_status():
+    """
+    Endpoint chẩn đoán camera:
+    - Trả về JSON cho biết có thể mở camera không, kích thước frame và fps.
+    - Dùng để debug khi stream/capture không hoạt động trên Raspberry Pi.
+    """
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        return jsonify({"ok": False, "error": "Không mở được camera (cv2.VideoCapture(0) thất bại)"}), 500
+    try:
+        width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+        height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+        fps = float(cap.get(cv2.CAP_PROP_FPS) or 0.0)
+    finally:
+        cap.release()
+
+    return jsonify({"ok": True, "width": width, "height": height, "fps": fps})
+
+
+def gen_camera_frames(camera_index=0):
+    cap = cv2.VideoCapture(camera_index)
+    if not cap.isOpened():
+        return
+    try:
+        while True:
+            ret, frame = cap.read()
+            if not ret:
+                break
+            ret2, jpeg = cv2.imencode('.jpg', frame)
+            if not ret2:
+                continue
+            chunk = jpeg.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + chunk + b'\r\n')
+    finally:
+        cap.release()
+
+
+@app.route('/camera_stream')
+def camera_stream():
+    return Response(gen_camera_frames(0), mimetype='multipart/x-mixed-replace; boundary=frame')
+
+
+@app.route('/camera_capture', methods=['POST'])
+def camera_capture():
+    # Capture a single frame from the server camera and save to uploads
+    cap = cv2.VideoCapture(0)
+    if not cap.isOpened():
+        return jsonify({"error": "Không mở được camera trên server"}), 500
+    ret, frame = cap.read()
+    cap.release()
+    if not ret or frame is None:
+        return jsonify({"error": "Không chụp được khung từ camera"}), 500
+
+    # Save with unique name
+    timestamp = str(uuid.uuid4())[:8]
+    filename = f"camera_{timestamp}.jpg"
+    save_path = os.path.join(UPLOAD_FOLDER, filename)
+    try:
+        cv2.imwrite(save_path, frame)
+    except Exception as e:
+        return jsonify({"error": f"Không lưu được ảnh: {e}"}), 500
+
+    # Return full external URL so client or server can reuse it
+    image_url = url_for('static', filename=f"uploads/{filename}", _external=True)
+    return jsonify({"image_url": image_url})

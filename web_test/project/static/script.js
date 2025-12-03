@@ -23,6 +23,8 @@ const iouVal = document.getElementById("iouVal");          // Hiển thị giá 
 
 const originalImg = document.getElementById("originalImg");    // ảnh gốc preview
 const processedImg = document.getElementById("processedImg");  // ảnh đã xử lý YOLO
+const cameraPreview = document.getElementById('cameraPreview');
+const cameraCaptureBtn = document.getElementById('cameraCaptureBtn');
 
 const downloadBtn = document.getElementById("downloadBtn");    // nút download ảnh xử lý
 
@@ -68,9 +70,176 @@ function updateLightTimes(greenSec, yellowSec, redSec) {
 }
 
 // ==========================================
-// TIME DISPLAY — Đếm thời gian thực người dùng chờ xử lý
-// NOTE: Đây là thời gian CLIENT đo (UX), không phải thời gian YOLO thật 100%
+// DENSITY DISPLAY - CẬP NHẬT MẬT ĐỘ XE
+// NOTE: Hiển thị tổng số xe và phân loại mức độ
 // ==========================================
+function updateDensity(totalVehicles) {
+    const totalEl = document.getElementById('totalVehicles');
+    const levelEl = document.getElementById('densityLevel');
+    
+    if (totalEl) totalEl.textContent = totalVehicles;
+    
+    let level = '—';
+    if (totalVehicles < 5) level = '🟢 Ít';
+    else if (totalVehicles <= 10) level = '🟡 Trung bình';
+    else if (totalVehicles <= 15) level = '🟠 Khá';
+    else level = '🔴 Đông';
+    
+    if (levelEl) levelEl.textContent = level;
+}
+
+// =========================
+// CAMERA - server-side stream & capture (Raspberry Pi / USB camera)
+// - Stream served from server at `/camera_stream` (MJPEG)
+// - Capture endpoint `/camera_capture` triggers server to grab one frame from /dev/video0
+// ==========================================
+
+function startCamera() {
+    // Start showing server-side MJPEG stream
+    if (cameraPreview) cameraPreview.src = '/camera_stream';
+}
+
+function stopCamera() {
+    if (cameraPreview) cameraPreview.src = '';
+}
+
+async function captureFrameAndSend() {
+    try {
+        // Ask server to capture a single frame from the connected USB camera
+        const res = await fetch('/camera_capture', { method: 'POST' });
+        if (!res.ok) throw new Error('Camera capture failed: ' + res.status);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        const imageUrl = data.image_url; // full external URL from server
+
+        // Set original preview to captured image and trigger upload by URL
+        if (originalImg) {
+            originalImg.src = imageUrl + '?t=' + Date.now();
+            originalImg.classList.add('active');
+        }
+
+        const imageUrlInput = document.getElementById('imageUrlInput');
+        if (imageUrlInput) imageUrlInput.value = imageUrl;
+
+        // Automatically send to /upload using the image_url field so server will use saved frame
+        await uploadByImageUrl(imageUrl);
+    } catch (err) {
+        console.error(err);
+        showError('Lỗi khi chụp ảnh từ camera: ' + (err.message || err));
+    }
+}
+
+// Send a Blob (from camera capture) to /upload, reuse handling similar to form submit
+async function sendImageBlob(blob, filename) {
+    loading.style.display = 'block';
+    startTimer();
+    form.querySelector('.btn-primary').disabled = true;
+    const formData = new FormData();
+    formData.append('image', blob, filename);
+    formData.append('conf', confSlider.value);
+    formData.append('iou', iouSlider.value);
+
+    try {
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Server error: ' + res.status);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        const processedUrl = data.processed_image_url + '?t=' + Date.now();
+        // update main processed image
+        if (processedImg) {
+            processedImg.onload = () => processedImg.classList.add('active');
+            processedImg.src = processedUrl;
+        }
+
+        // update counts and density
+        let totalVehicles = 0;
+        if (data.counts && Array.isArray(data.counts)) {
+            for (let i = 0; i < data.counts.length; i++) {
+                const countEl = document.getElementById(`count-${i}`);
+                if (countEl) countEl.textContent = data.counts[i];
+                totalVehicles += data.counts[i];
+            }
+        }
+        updateDensity(totalVehicles);
+
+        // update light times
+        if (typeof data.red_seconds === 'number') {
+            const r = Number(data.red_seconds);
+            const y = Number(data.yellow_seconds || 3);
+            const g = Number(data.green_seconds || Math.max(0, r - y));
+            updateLightTimes(g, y, r);
+        }
+
+    } catch (err) {
+        console.error(err);
+        showError('Lỗi khi gửi ảnh từ camera: ' + (err.message || err));
+    } finally {
+        loading.style.display = 'none';
+        form.querySelector('.btn-primary').disabled = false;
+        stopTimer();
+    }
+}
+
+// hook camera buttons
+// Camera stream is always running (server-side). Start it when DOM is ready.
+window.addEventListener('DOMContentLoaded', () => {
+    try { startCamera(); } catch (e) { /* ignore */ }
+});
+if (cameraCaptureBtn) cameraCaptureBtn.addEventListener('click', () => captureFrameAndSend());
+
+// Upload by image URL (used when server saved a captured frame and returned its public URL)
+async function uploadByImageUrl(imageUrl) {
+    loading.style.display = 'block';
+    startTimer();
+    form.querySelector('.btn-primary').disabled = true;
+    const formData = new FormData();
+    formData.append('image_url', imageUrl);
+    formData.append('conf', confSlider.value);
+    formData.append('iou', iouSlider.value);
+
+    try {
+        const res = await fetch('/upload', { method: 'POST', body: formData });
+        if (!res.ok) throw new Error('Server error: ' + res.status);
+        const data = await res.json();
+        if (data.error) throw new Error(data.error);
+
+        const processedUrl = data.processed_image_url + '?t=' + Date.now();
+        if (processedImg) {
+            processedImg.onload = () => processedImg.classList.add('active');
+            processedImg.src = processedUrl;
+            downloadBtn.href = data.processed_image_url;
+        }
+
+        // update counts + density
+        let totalVehicles = 0;
+        if (data.counts && Array.isArray(data.counts)) {
+            for (let i = 0; i < data.counts.length; i++) {
+                const countEl = document.getElementById(`count-${i}`);
+                if (countEl) countEl.textContent = data.counts[i];
+                totalVehicles += data.counts[i];
+            }
+        }
+        updateDensity(totalVehicles);
+
+        // update light times
+        if (typeof data.red_seconds === 'number') {
+            const r = Number(data.red_seconds);
+            const y = Number(data.yellow_seconds || 3);
+            const g = Number(data.green_seconds || Math.max(0, r - y));
+            updateLightTimes(g, y, r);
+        }
+
+    } catch (err) {
+        console.error(err);
+        showError('Lỗi upload ảnh: ' + (err.message || err));
+    } finally {
+        loading.style.display = 'none';
+        form.querySelector('.btn-primary').disabled = false;
+        stopTimer();
+    }
+}
 let startTime = null;
 let timerInterval = null;
 
@@ -171,25 +340,7 @@ form.addEventListener("submit", async (e) => {
     formData.append("image", file);
     formData.append("conf", confSlider.value);
     formData.append("iou", iouSlider.value);
-            formData.append('image', file);
 
-            // Lấy giá trị thời gian (s/xe) do người dùng nhập cho mỗi lớp: #persec-0 .. #persec-5
-            // Gửi dưới dạng JSON string trong trường 'persec'
-            const perSecs = [];
-            for (let i = 0; i < 6; i++) {
-                const el = document.getElementById(`persec-${i}`);
-                let v = 0;
-                if (el) {
-                    v = Number(el.value) || 0;
-                }
-                perSecs.push(v);
-            }
-            formData.append('persec', JSON.stringify(perSecs));
-            // Thêm các tham số conf, iou từ slider (nếu cần server sử dụng)
-            const conf = document.getElementById('confSlider')?.value || '0.5';
-            const iou = document.getElementById('iouSlider')?.value || '0.5';
-            formData.append('conf', conf);
-            formData.append('iou', iou);
     try {
         // Gửi request đến /upload
         const res = await fetch("/upload", {
@@ -212,13 +363,19 @@ form.addEventListener("submit", async (e) => {
             processedImg.classList.add("active");
             downloadBtn.href = data.processed_image_url; // link download file detect
 
-            // Cập nhật ô đếm 6 lớp (counts[0..5])
+            // Cập nhật các ô đếm (counts[0..5])
+            // Tính tổng số xe để hiển thị mật độ
+            let totalVehicles = 0;
             if (data.counts && Array.isArray(data.counts)) {
-                data.counts.slice(0,6).forEach((c, idx) => {
-                    const el = document.getElementById(`count-${idx}`);
-                    if (el) el.textContent = c;
-                });
+                for (let i = 0; i < data.counts.length; i++) {
+                    const countEl = document.getElementById(`count-${i}`);
+                    if (countEl) countEl.textContent = data.counts[i];
+                    totalVehicles += data.counts[i];
+                }
             }
+            
+            // Cập nhật hiển thị mật độ
+            updateDensity(totalVehicles);
 
             // Nếu server cung cấp thời gian tính toán thật → cập nhật các đèn
             if (typeof data.red_seconds === 'number') {

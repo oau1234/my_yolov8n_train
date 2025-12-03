@@ -23,7 +23,7 @@
     <main class="container">
         <div class="main-content">
 
-            <!-- ===== ROW 1: TOP - Input (left) + Traffic Lights (right) ===== -->
+            <!-- ===== ROW 1: TOP - Input (left) + Camera (right) ===== -->
             <div class="top-row">
 
                 <!-- LEFT: File Input & Parameters -->
@@ -54,36 +54,26 @@
                                        value="0.5" id="iouSlider" class="slider">
                             </div>
 
-                            <button type="submit" class="btn-primary">🚀 Detect</button>
+                            <div class="form-section buttons-row">
+                                <button type="submit" class="btn-primary">🚀 Detect</button>
+                                <input type="hidden" id="imageUrlInput" name="image_url" value="">
+                                <button id="cameraCaptureBtn" type="button" class="btn-secondary">📷 Chụp ảnh</button>
+                            </div>
                         </form>
                     </section>
                 </div>
 
-                <!-- RIGHT: Traffic Lights -->
-                <div class="lights-section">
-                    <div class="traffic-light-panel">
-                        <div class="traffic-light-item active" id="statusGreen">
-                            <div class="light green"></div>
-                            <div class="light-info">
-                                <span class="light-label">Xanh</span>
-                                <div class="light-time" id="greenTime">0s</div>
+                <!-- RIGHT: Camera realtime & capture (nhỏ, ngang với chọn ảnh) -->
+                <div class="camera-section">
+                    <section class="control-panel">
+                        <div class="camera-wrapper">
+                            <div class="camera-box">
+                                <div class="camera-label">Live</div>
+                                <!-- Server-side MJPEG stream từ Raspberry Pi (USB camera) -->
+                                <img id="cameraPreview" class="camera-video" src="/camera_stream" alt="Camera Stream">
                             </div>
                         </div>
-                        <div class="traffic-light-item active" id="statusYellow">
-                            <div class="light yellow"></div>
-                            <div class="light-info">
-                                <span class="light-label">Vàng</span>
-                                <div class="light-time" id="yellowTime">3s</div>
-                            </div>
-                        </div>
-                        <div class="traffic-light-item active" id="statusRed">
-                            <div class="light red"></div>
-                            <div class="light-info">
-                                <span class="light-label">Đỏ</span>
-                                <div class="light-time" id="redTime">0s</div>
-                            </div>
-                        </div>
-                    </div>
+                    </section>
                 </div>
 
             </div>
@@ -112,23 +102,55 @@
                 </div>
             </div>
 
-            <!-- ===== ROW 3: BOTTOM - Config (left) + Counts (right) ===== -->
+            <!-- ===== ROW 3: BOTTOM - Config+Lights (left) + Counts (right) ===== -->
             <div class="bottom-row">
 
-                <!-- LEFT: Per-class seconds config -->
+                <!-- LEFT: Traffic Lights + Density Display -->
                 <div class="config-section">
-                    <h3 class="section-title">Cấu hình đèn đỏ (s/xe)</h3>
-                    <div class="persec-grid">
-                        {% set names = class_names if class_names else ['car','threewheel','bus','truck','motorbike','van'] %}
-                        {% set defaults = [5,4,10,8,5,3] %}
-                        {% for i in range(6) %}
-                        <label class="persec-item">
-                            <span class="persec-label">{{ names[i] if i < names|length else ('Class ' ~ (i+1)) }}</span>
-                            <input type="number" min="0" step="1" value="{{ defaults[i] if i < defaults|length else 5 }}" id="persec-{{ i }}" class="persec-input">
-                        </label>
-                        {% endfor %}
+                    
+                    <!-- Traffic Lights Panel -->
+                    <div class="traffic-light-panel">
+                        <div class="section-title-traffic">🚦 Trạng Thái Đèn Giao Thông</div>
+                        <div class="traffic-light-container">
+                            <div class="traffic-light-item active" id="statusGreen">
+                                <div class="light green"></div>
+                                <div class="light-info">
+                                    <span class="light-label">Xanh</span>
+                                    <div class="light-time" id="greenTime">0s</div>
+                                </div>
+                            </div>
+                            <div class="traffic-light-item active" id="statusYellow">
+                                <div class="light yellow"></div>
+                                <div class="light-info">
+                                    <span class="light-label">Vàng</span>
+                                    <div class="light-time" id="yellowTime">3s</div>
+                                </div>
+                            </div>
+                            <div class="traffic-light-item active" id="statusRed">
+                                <div class="light red"></div>
+                                <div class="light-info">
+                                    <span class="light-label">Đỏ</span>
+                                    <div class="light-time" id="redTime">0s</div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="persec-note">Ghi chú: vàng cố định <strong>3s</strong>. Đỏ = tổng(s/xe * số xe).</div>
+
+                    <!-- Density Display -->
+                    <div class="density-panel">
+                        <h3 class="section-title">Mật Độ Giao Thông</h3>
+                        <div class="density-display">
+                            <div class="density-box">
+                                <div class="density-label">Tổng Số Xe</div>
+                                <div class="density-value" id="totalVehicles">0</div>
+                            </div>
+                            <div class="density-box">
+                                <div class="density-label">Mức Độ</div>
+                                <div class="density-level" id="densityLevel">—</div>
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
                 <!-- RIGHT: Count boxes -->
