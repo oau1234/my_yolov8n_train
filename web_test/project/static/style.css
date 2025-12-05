@@ -556,42 +556,35 @@ body {
     - `.file-input::file-selector-button`: nút bên trong input để chọn file, có style rõ ràng.
     - `.file-name`: hiển thị tên file, kích thước và tên file đầu ra dự kiến.
 */
-.file-input {
-    padding: 12px;
-    background: rgba(255, 255, 255, 0.05);
-    border: 2px dashed rgba(0, 212, 255, 0.5);
-    border-radius: 8px;
-    color: #e0e0e0;
-    cursor: pointer;
-    transition: all 0.3s ease;
-    font-size: 0.95em;
-}
+/* File upload removed from UI; file-input styles removed */
 
-.file-input:hover {
-    border-color: #00d4ff;
-    background: rgba(0, 212, 255, 0.05);
-}
-
-.file-input::file-selector-button {
-    background: #00d4ff;
-    color: #0f0f1e;
-    border: none;
-    padding: 8px 16px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: all 0.3s ease;
-}
-
-.file-input::file-selector-button:hover {
-    background: #00b8ff;
+/* Detect button running state */
+.btn-primary.running {
+    background: linear-gradient(135deg, #ff6b6b 0%, #ff8e53 100%);
+    box-shadow: 0 10px 30px rgba(255, 100, 100, 0.25);
     transform: translateY(-2px);
 }
 
-.file-name {
-    font-size: 0.9em;
-    color: #999;
-    font-style: italic;
+/* Countdown highlight for green time */
+#greenTime {
+    font-size: 1.35em;
+    color: #44dd44;
+    background: rgba(68, 221, 68, 0.06);
+    padding: 4px 8px;
+    border-radius: 6px;
+}
+
+/* Small visible countdown widget (optional) */
+.auto-countdown {
+    margin-top: 10px;
+    padding: 8px 12px;
+    background: rgba(255,255,255,0.02);
+    border: 1px solid rgba(0,0,0,0.08);
+    border-radius: 8px;
+    display: inline-block;
+    color: #00d4ff;
+    font-weight: 700;
+    font-family: 'Courier New', monospace;
 }
 
 /* Range Slider */
