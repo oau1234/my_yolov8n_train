@@ -112,15 +112,15 @@ function showProcessedImage(url) {
 // ==============================================
 function handleCaptureResponse(data) {
     // ----------- Đếm xe -----------  
-    let total = 0;
+    let totalCount = 0;
     if (Array.isArray(data.counts)) {
         data.counts.forEach((c, i) => {
             const el = document.getElementById(`count-${i}`);
             if (el) el.textContent = c;
-            total += c;
+            totalCount += c;
         });
     }
-    updateDensity(total);
+    updateDensity(totalCount);
 
     // ----------- Ảnh gốc -----------  
     if (data.input_image_url) {
@@ -134,12 +134,16 @@ function handleCaptureResponse(data) {
         downloadBtn.href = data.processed_image_url;
     }
 
-    // ----------- Thời gian đèn -----------  
-    const r = data.red_seconds ?? 0;
-    const y = data.yellow_seconds ?? 3;
-    const g = data.green_seconds ?? Math.max(0, r - y);
+    // ----------- Thời gian đèn -----------
+    // Server returns `total_seconds` (red+yellow) and `green_seconds`.
+    // Keep compatibility: prefer explicit red/yellow if provided,
+    // otherwise derive red from total_seconds and use default yellow=3.
+    const yellow = data.yellow_seconds ?? 3;
+    const total = data.total_seconds ?? data.red_seconds ?? 0;
+    const red = total; // server's total_seconds corresponds to red time in app logic
+    const green = data.green_seconds ?? Math.max(0, red - yellow);
 
-    updateLightTimes(g, y, r);
+    updateLightTimes(green, yellow, red);
 
     showError("");
 }

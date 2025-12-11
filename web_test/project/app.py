@@ -54,12 +54,121 @@ if os.path.exists(classes_file):
         CLASS_NAMES = []
 else:
     CLASS_NAMES = []
+#=================================
+#=====Module Detect Frame ========
+#=================================
+def detect_frame(frame, model, class_names, upload_folder, output_folder, static_dir, conf=0.5, iou=0.5):
+    """Run YOLO detection on a single frame, save input/output images.
 
+    Returns: (result_dict, cmd_str)
+    """
+    try:
+        # ensure folders exist
+        os.makedirs(upload_folder, exist_ok=True)
+        os.makedirs(output_folder, exist_ok=True)
+
+        # save original image
+        timestamp = str(uuid.uuid4())[:8]
+        filename = f"camera_{timestamp}.jpg"
+        save_path = os.path.join(upload_folder, filename)
+        cv2.imwrite(save_path, frame)
+
+        # run model
+        results = model(frame, conf=conf, iou=iou)
+
+        # draw / create output image
+        try:
+            img_out = results[0].plot()
+        except Exception:
+            img_out = frame
+
+        name_only = os.path.splitext(filename)[0]
+        ext = os.path.splitext(filename)[1]
+        output_filename = f"{name_only}_detect{ext}"
+        output_path = os.path.join(output_folder, output_filename)
+        cv2.imwrite(output_path, img_out)
+
+        # count classes
+        num_classes = len(class_names) if class_names else 6
+        counts = [0] * num_classes
+        try:
+            boxes = results[0].boxes
+            if hasattr(boxes, 'cls'):
+                cls_vals = boxes.cls
+                # Convert class values to plain Python ints to avoid numpy __array__ deprecation
+                try:
+                    cls_arr = [int(x) for x in cls_vals]
+                except Exception:
+                    try:
+                        cls_arr = [int(float(x)) for x in cls_vals]
+                    except Exception:
+                        cls_arr = []
+                for c in cls_arr:
+                    if 0 <= int(c) < num_classes:
+                        counts[int(c)] += 1
+        except Exception:
+            counts = [0] * num_classes
+
+        total_vehicles = sum(counts)
+
+        # mapping total vehicles -> seconds and cmd
+        if 0 < total_vehicles < 5:
+            total_seconds = 20
+            cmd = "m1"
+        elif 5 <= total_vehicles <= 10:
+            total_seconds = 45
+            cmd = "m2"
+        elif 10 < total_vehicles <= 20:
+            total_seconds = 60
+            cmd = "m3"
+        elif total_vehicles > 20:
+            total_seconds = 90
+            cmd = "m4"
+        else:
+            total_seconds = 30
+            cmd = "m0"
+
+        yellow_seconds = 3
+        red_seconds = int(total_seconds)
+        green_seconds = max(0, red_seconds - yellow_seconds)
+
+        processed_url = f"/static/outputs/{output_filename}"
+        input_url = f"/static/uploads/{filename}"
+
+        result = {
+            "processed_image_url": processed_url,
+            "input_image_url": input_url,
+            "counts": counts,
+            "total_vehicles": total_vehicles,
+            "total_seconds": total_seconds,
+            "green_seconds": green_seconds,
+            "status": "ready",
+            "timestamp": int(time.time())
+        }
+        # write last_detection.json so frontend polling can pick up UART-triggered detects
+        try:
+            last_path = os.path.join(static_dir, 'last_detection.json')
+            with open(last_path, 'w', encoding='utf-8') as jf:
+                json.dump(result, jf, ensure_ascii=False)
+        except Exception:
+            pass
+
+        return result, cmd
+
+    except Exception as e:
+        # on error return minimal info; do not write last_detection.json
+        return {"error": str(e)}, "m0"
+#==============================    
+#==== Giao diện chính =========
+#==============================
 @app.route("/")
 def index():
     # Trả về giao diện chính + gửi danh sách tên lớp về frontend
     return render_template("index.html", class_names=CLASS_NAMES)
 
+#======================================
+# CAMERA HANDLER - Quản lý camera trong thread riêng
+#======================================
 class CameraHandler:
     # ===== __init__ =====
     # Khởi tạo camera handler: thiết lập source, khoảng time reconnect, ngưỡng frame lỗi
@@ -98,7 +207,7 @@ class CameraHandler:
     # ===== start =====
     # Bắt đầu đọc camera trong thread nền riêng
     def start(self):
-        """ Báº¯t Ä'áº§u Ä'á»c camera trong thread riÃªng """
+        """ Bắt đầu đọc camera trong thread nền riêng """
         if self.running:
             return
         self.running = True
@@ -203,7 +312,6 @@ class UARTHandler:
     # ===== send =====
     # Gửi cmd/message đến ESP32 qua UART
     def send(self, msg):
-        """Gá»­i cmd Ä'áº¿n ESP32"""
         if self.uart is None:
             return False
         try:
@@ -218,7 +326,6 @@ class UARTHandler:
     # ===== start_listening =====
     # Bắt đầu thread lắng nghe UART từ ESP32
     def start_listening(self):
-        """Báº¯t Ä'áº§u thread láº¯ng nghe UART"""
         if self.running:
             return
         self.running = True
@@ -229,7 +336,6 @@ class UARTHandler:
     # ===== _listen =====
     # Thread nền: lắng nghe UART từ ESP32, trigger xử lý khi nhận 'yell'
     def _listen(self):
-        """Thread ná»n: láº¯ng nghe UART tá»« ESP32"""
         while self.running:
             if self.uart is None or not self.uart.is_open:
                 time.sleep(0.5)
@@ -244,104 +350,26 @@ class UARTHandler:
             except Exception as e:
                 print(f"UART read error: {e}")
                 time.sleep(0.1)
-    
+
     # ===== _handle_yell =====
     # Xử lý khi nhận 'yell' từ ESP32: chụp ảnh, detect, lưu, gửi lại m1..m4
     def _handle_yell(self):
-        """Xá»­ lÃ½ khi nháº­n 'yell' tá»« ESP32"""
         try:
-            # Chá»¥p áº£nh + detect
-            if not camera_handler.is_opened():
-                print("Camera not available")
-                return
-            
-            ret, frame = camera_handler.read()
-            if not ret or frame is None:
-                print("Failed to capture frame")
-                return
-            
-            if model is None:
-                print("Model not loaded")
-                return
-            
-            # Detect
-            results = model(frame, conf=0.5, iou=0.5)
-            
-            # Đếm xe
-            num_classes = len(CLASS_NAMES) if CLASS_NAMES else 6
-            counts = [0] * num_classes
-            try:
-                boxes = results[0].boxes
-                if hasattr(boxes, 'cls'):
-                    cls_vals = boxes.cls
-                    try:
-                        cls_arr = np.array(cls_vals).astype(int).flatten()
-                    except:
-                        cls_arr = [int(x) for x in cls_vals]
-                    for c in cls_arr:
-                        if 0 <= int(c) < num_classes:
-                            counts[int(c)] += 1
-            except:
-                pass
-            
-            total_vehicles = sum(counts)
-            
-            # Xác định cmd gửi lại
-            if 0 < total_vehicles < 5:
-                cmd = "m1"
-            elif 5 <= total_vehicles <= 10:
-                cmd = "m2"
-            elif 10 < total_vehicles <= 20:
-                cmd = "m3"
-            elif total_vehicles > 20:
-                cmd = "m4"
+            # Use the shared capture flow so behavior matches /camera_capture
+            res, cmd = capture_and_detect(conf=0.5, iou=0.5)
+            if isinstance(res, dict) and res.get('error'):
+                print(f"Yell capture error: {res.get('error')}")
+                self.send("m0")
             else:
-                cmd = "m0"
-            # Lưu ảnh gốc và ảnh đã detect để frontend có thể hiển thị
-            try:
-                timestamp = str(uuid.uuid4())[:8]
-                filename = f"camera_{timestamp}.jpg"
-                save_path = os.path.join(UPLOAD_FOLDER, filename)
-                cv2.imwrite(save_path, frame)
-
-                # tạo ảnh output từ kết quả
-                img_out = results[0].plot()
-                name_only = os.path.splitext(filename)[0]
-                ext = os.path.splitext(filename)[1]
-                output_filename = f"{name_only}_detect{ext}"
-                output_path = os.path.join(OUTPUT_FOLDER, output_filename)
-                cv2.imwrite(output_path, img_out)
-
-                # Tạo result dict và lưu last_detection.json
-                processed_url = f"/static/outputs/{output_filename}"
-                input_url = f"/static/uploads/{filename}"
-                result = {
-                    "processed_image_url": processed_url,
-                    "input_image_url": input_url,
-                    "counts": counts,
-                    "total_vehicles": total_vehicles,
-                    "timestamp": int(time.time())
-                }
-                try:
-                    last_path = os.path.join(STATIC_DIR, 'last_detection.json')
-                    with open(last_path, 'w', encoding='utf-8') as jf:
-                        json.dump(result, jf, ensure_ascii=False)
-                except Exception as e:
-                    print(f"[DETECT] Không thể lưu last_detection.json (UART): {e}")
-            except Exception as e:
-                print(f"[DETECT] Không thể lưu ảnh khi xử lý yell: {e}")
-
-            # Gửi cmd lại ESP32
-            self.send(cmd)
-            print(f"Detected {total_vehicles} vehicles, sent {cmd}")
-            
+                self.send(cmd)
+                print(f"Detected {res.get('total_vehicles', 0)} vehicles, sent {cmd}")
         except Exception as e:
             print(f"Error handling yell: {e}")
     
     # ===== stop =====
     # Tắt UART: dừng thread lắng nghe, đóng serial port
     def stop(self):
-        """Táº¯t UART"""
+        """Tắt UART"""
         self.running = False
         if self.thread:
             self.thread.join(timeout=1)
@@ -374,7 +402,7 @@ def gen_camera_frames():
             time.sleep(0.05)
             continue
 
-        # encode khung thÃ nh JPG
+        # encode khung ảnh thành JPG
         ret2, jpeg = cv2.imencode('.jpg', frame)
         if not ret2:
             continue
@@ -394,27 +422,29 @@ def camera_stream():
 # -------------------------------------------------------------------------
 # API CHỤP ẢNH + CHẠY YOLO + TRẢ KẾT QUẢ
 # -------------------------------------------------------------------------
-@app.route('/camera_capture', methods=['POST'])
-def camera_capture():
-    """
-   chụp ảnh → lấy frame hiện tại → chạy YOLO → lưu ảnh → trả JSON:
-    
-    """
-    # Kiểm tra camera ok
-    if not camera_handler.is_opened():
-        return jsonify({"error": "Camera not available"}), 500
+def capture_and_detect(conf=0.5, iou=0.5):
+    """Helper: read camera, run detect_frame, return (result_dict, cmd)
 
-    # Lấy frame mới nhất
+    Returns tuple (result, cmd). On error, result contains 'error' key.
+    """
+    if not camera_handler.is_opened():
+        return {"error": "Camera not available"}, "m0"
+
     ret, frame = camera_handler.read()
     if not ret or frame is None:
-        return jsonify({"error": "Không chụp được khung từ camera"}), 500
-    # tên file ngẫu nhiên
-    timestamp = str(uuid.uuid4())[:8]
-    filename = f"camera_{timestamp}.jpg"
-    save_path = os.path.join(UPLOAD_FOLDER, filename)
-    # lưu ảnh gốc
-    cv2.imwrite(save_path, frame)
-    # lấy tham số conf, IOU từ frontend
+        return {"error": "Không chụp được khung từ camera"}, "m0"
+
+    if model is None:
+        return {"error": "Model not loaded"}, "m0"
+
+    try:
+        res, cmd = detect_frame(frame, model, CLASS_NAMES, UPLOAD_FOLDER, OUTPUT_FOLDER, STATIC_DIR, conf=conf, iou=iou)
+        return res, cmd
+    except Exception as e:
+        return {"error": str(e)}, "m0"
+
+@app.route('/camera_capture', methods=['POST'])
+def camera_capture():
     try:
         conf = float(request.args.get('conf', 0.5))
     except Exception:
@@ -423,85 +453,16 @@ def camera_capture():
         iou = float(request.args.get('iou', 0.5))
     except Exception:
         iou = 0.5
-    # Ä‘á»c láº¡i áº£nh
-    img = cv2.imread(save_path)
-    if img is None:
-        return jsonify({"error": "Không thể đọc ảnh capture"}), 500
-    # chạy YOLO detect
-    results = model(img, conf=conf, iou=iou)
-    # vẽ bbox
-    img_out = results[0].plot()
-    # lưu ảnh output
-    name_only = os.path.splitext(filename)[0]
-    ext = os.path.splitext(filename)[1]
-    output_filename = f"{name_only}_detect{ext}"
-    output_path = os.path.join(OUTPUT_FOLDER, output_filename)
-    cv2.imwrite(output_path, img_out)
-    # đếm số lượng class
-    num_classes = len(CLASS_NAMES) if CLASS_NAMES else 6
-    counts = [0] * num_classes
-    try:
-        boxes = results[0].boxes
-        if hasattr(boxes, 'cls'):  # YOLO trả về danh sách cls
-            cls_vals = boxes.cls
-            try:
-                cls_arr = np.array(cls_vals).astype(int).flatten()
-            except Exception:
-                cls_arr = [int(x) for x in cls_vals]
 
-            for c in cls_arr:
-                if 0 <= int(c) < num_classes:
-                    counts[int(c)] += 1
-    except Exception:
-        counts = [0] * num_classes
+    res, cmd = capture_and_detect(conf, iou)
 
-    # Tính thời gian đèn theo số lượng xe
-    total_vehicles = sum(counts)
+    if isinstance(res, dict) and res.get('error'):
+        return jsonify(res), 500
 
-    if 0 < total_vehicles < 5:
-        total_seconds = 20
-        cmd = "m1"
-    elif 5 <= total_vehicles <= 10:
-        total_seconds = 45
-        cmd = "m2"
-    elif 10 < total_vehicles <= 20:
-        total_seconds = 60
-        cmd = "m3"
-    elif total_vehicles > 20:
-        total_seconds = 90
-        cmd = "m4"
-    else:
-        total_seconds = 30
+    return jsonify(res)
 
-    yellow_seconds = 3
-    red_seconds = int(total_seconds)
-    green_seconds = max(0, red_seconds - yellow_seconds)
-    # tạo URL ảnh để trả về frontend
-    processed_url = f"/static/outputs/{output_filename}"
-    input_url = f"/static/uploads/{filename}"
-
-    result = {
-        "processed_image_url": processed_url,
-        "input_image_url": input_url,
-        "counts": counts,
-        "total_vehicles": total_vehicles,
-        "total_seconds": total_seconds,
-        "green_seconds": green_seconds,
-        "status": "ready",
-        "timestamp": int(time.time())
-    }
-
-    # Lưu một bản sao của lần phát hiện cuối cùng vào thư mục static để frontend (trình duyệt) có thể lấy nó
-    try:
-        last_path = os.path.join(STATIC_DIR, 'last_detection.json')
-        with open(last_path, 'w', encoding='utf-8') as jf:
-            json.dump(result, jf, ensure_ascii=False)
-    except Exception as e:
-        print(f"[DETECT] Không thể lưu last_detection.json: {e}")
-
-    return jsonify(result)
 # -------------------------------------------------------------------------
-# CHáº Y SERVER FLASK
+# CHAY SERVER FLASK
 # -------------------------------------------------------------------------
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000, debug=False)
